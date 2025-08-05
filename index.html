@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ivoire Ride - Simulation VTC Côte d'Ivoire</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        #map {
+            height: 400px;
+            width: 100%;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        
+        .vehicle-marker {
+            background-color: #FF8C00;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 12px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+        
+        .route-animation {
+            stroke-dasharray: 1000;
+            stroke-dashoffset: 1000;
+            animation: dash 30s linear forwards;
+        }
+        
+        @keyframes dash {
+            to {
+                stroke-dashoffset: 0;
+            }
+        }
+        
+        .slide-up {
+            animation: slideUp 0.5s ease-out;
+        }
+        
+        @keyframes slideUp {
+            from {
+                transform: translateY(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+    <div class="min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="bg-white shadow-sm">
+            <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 rounded-full bg-[#FF8C00] flex items-center justify-center text-white font-bold mr-2">IR</div>
+                    <h1 class="text-xl font-bold text-[#1A2A6C]">Ivoire Ride</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button class="text-gray-600 hover:text-[#FF8C00]">
+                        <i class="fas fa-history"></i>
+                    </button>
+                    <button class="text-gray-600 hover:text-[#FF8C00]">
+                        <i class="fas fa-user-circle"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-grow container mx-auto px-4 py-6">
+            <!-- Booking Steps -->
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <div class="flex-1 text-center">
+                        <div class="w-8 h-8 mx-auto rounded-full bg-[#FF8C00] text-white flex items-center justify-center font-bold">1</div>
+                        <p class="text-sm mt-1 text-[#FF8C00] font-medium">Trajet</p>
+                    </div>
+                    <div class="flex-1">
+                        <div class="h-1 bg-gray-300 mx-2 mt-4">
+                            <div class="h-1 bg-[#FF8C00] w-1/3"></div>
+                        </div>
+                    </div>
+                    <div class="flex-1 text-center">
+                        <div class="w-8 h-8 mx-auto rounded-full bg-gray-300 text-gray-600 flex items-center justify-center font-bold">2</div>
+                        <p class="text-sm mt-1 text-gray-500">Véhicule</p>
+                    </div>
+                    <div class="flex-1">
+                        <div class="h-1 bg-gray-300 mx-2 mt-4"></div>
+                    </div>
+                    <div class="flex-1 text-center">
+                        <div class="w-8 h-8 mx-auto rounded-full bg-gray-300 text-gray-600 flex items-center justify-center font-bold">3</div>
+                        <p class="text-sm mt-1 text-gray-500">Confirmation</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Map Section -->
+            <div class="bg-white rounded-xl shadow-md p-4 mb-6">
+                <h2 class="text-lg font-semibold text-[#1A2A6C] mb-3">Définissez votre trajet</h2>
+                <div id="map"></div>
+            </div>
+
+            <!-- Location Inputs -->
+            <div class="bg-white rounded-xl shadow-md p-4 mb-6">
+                <div class="flex items-center mb-3">
+                    <div class="w-4 h-4 rounded-full bg-[#FF8C00] mr-3"></div>
+                    <input type="text" id="pickup" placeholder="Lieu de prise en charge" class="flex-grow p-2 border-b border-gray-300 focus:outline-none focus:border-[#FF8C00]">
+                </div>
+                <div class="flex items-center">
+                    <div class="w-4 h-4 rounded-full bg-[#1A2A6C] mr-3"></div>
+                    <input type="text" id="destination" placeholder="Destination" class="flex-grow p-2 border-b border-gray-300 focus:outline-none focus:border-[#1A2A6C]">
+                </div>
+            </div>
+
+            <!-- Vehicle Selection -->
+            <div class="bg-white rounded-xl shadow-md p-4 mb-6 slide-up">
+                <h2 class="text-lg font-semibold text-[#1A2A6C] mb-3">Choisissez votre véhicule</h2>
+                
+                <div class="grid grid-cols-1 gap-3">
+                    <!-- Eco Option -->
+                    <div class="border rounded-lg p-3 hover:border-[#FF8C00] transition-all cursor-pointer" onclick="selectVehicle('eco')">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center">
+                                <i class="fas fa-car text-gray-500 mr-3 text-xl"></i>
+                                <div>
+                                    <h3 class="font-medium">Éco</h3>
+                                    <p class="text-sm text-gray-500">5 min d'attente</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-bold text-[#1A2A6C]">300 FCFA/km</p>
+                                <p class="text-sm text-gray-500">~2,500 FCFA</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Comfort Option -->
+                    <div class="border rounded-lg p-3 hover:border-[#FF8C00] transition-all cursor-pointer" onclick="selectVehicle('comfort')">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center">
+                                <i class="fas fa-car-side text-blue-500 mr-3 text-xl"></i>
+                                <div>
+                                    <h3 class="font-medium">Confort</h3>
+                                    <p class="text-sm text-gray-500">7 min d'attente</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-bold text-[#1A2A6C]">600 FCFA/km</p>
+                                <p class="text-sm text-gray-500">~5,000 FCFA</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Moto Option -->
+                    <div class="border rounded-lg p-3 hover:border-[#FF8C00] transition-all cursor-pointer" onclick="selectVehicle('moto')">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center">
+                                <i class="fas fa-motorcycle text-green-500 mr-3 text-xl"></i>
+                                <div>
+                                    <h3 class="font-medium">Moto</h3>
+                                    <p class="text-sm text-gray-500">3 min d'attente</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-bold text-[#1A2A6C]">150 FCFA/km</p>
+                                <p class="text-sm text-gray-500">~1,250 FCFA</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Driver Assignment -->
+            <div id="driver-assignment" class="bg-white rounded-xl shadow-md p-4 mb-6 hidden slide-up">
+                <h2 class="text-lg font-semibold text-[#1A2A6C] mb-3">Votre chauffeur</h2>
+                
+                <div class="flex items-center mb-4">
+                    <div class="relative mr-4">
+                        <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="Driver" class="w-16 h-16 rounded-full border-2 border-[#FF8C00]">
+                        <div class="absolute -bottom-1 -right-1 bg-white rounded-full p-1">
+                            <div class="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                                <i class="fas fa-check text-white text-xs"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="font-bold">Jean Kouassi</h3>
+                        <div class="flex items-center">
+                            <div class="flex text-yellow-400">
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star-half-alt"></i>
+                            </div>
+                            <span class="text-gray-600 ml-1">4.7</span>
+                        </div>
+                        <p class="text-sm text-gray-500">Toyota Corolla • AB 123 CD</p>
+                    </div>
+                </div>
+                
+                <div class="bg-gray-100 rounded-lg p-3 mb-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-gray-600">Distance</span>
+                        <span class="font-medium">8.5 km</span>
+                    </div>
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-gray-600">Durée</span>
+                        <span class="font-medium">15 min</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600">Prix estimé</span>
+                        <span class="font-bold text-[#FF8C00]">2,550 FCFA</span>
+                    </div>
+                </div>
+                
+                <button id="confirm-ride" class="w-full bg-[#FF8C00] text-white py-3 rounded-lg font-bold hover:bg-[#E67E00] transition-all">
+                    Confirmer la course
+                </button>
+            </div>
+
+            <!-- Ride Simulation -->
+            <div id="ride-simulation" class="bg-white rounded-xl shadow-md p-4 mb-6 hidden">
+                <h2 class="text-lg font-semibold text-[#1A2A6C] mb-3">Votre course en cours</h2>
+                
+                <div class="flex items-center mb-4">
+                    <div class="relative mr-4">
+                        <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="Driver" class="w-16 h-16 rounded-full border-2 border-[#FF8C00] pulse">
+                    </div>
+                    <div>
+                        <h3 class="font-bold">Jean Kouassi</h3>
+                        <p class="text-sm text-gray-500">Toyota Corolla • AB 123 CD</p>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <div class="flex justify-between text-sm mb-1">
+                        <span class="text-gray-600">Progression</span>
+                        <span id="progress-percent" class="font-medium">0%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                        <div id="progress-bar" class="bg-[#FF8C00] h-2.5 rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-3 gap-2 text-center mb-4">
+                    <div class="bg-gray-100 rounded-lg p-2">
+                        <p class="text-xs text-gray-500">Distance restante</p>
+                        <p id="remaining-distance" class="font-bold">8.5 km</p>
+                    </div>
+                    <div class="bg-gray-100 rounded-lg p-2">
+                        <p class="text-xs text-gray-500">Temps restant</p>
+                        <p id="remaining-time" class="font-bold">15 min</p>
+                    </div>
+                    <div class="bg-gray-100 rounded-lg p-2">
+                        <p class="text-xs text-gray-500">Coût actuel</p>
+                        <p id="current-cost" class="font-bold">0 FCFA</p>
+                    </div>
+                </div>
+                
+                <div class="bg-gray-100 rounded-lg p-3 mb-4">
+                    <div class="flex items-center mb-2">
+                        <div class="w-4 h-4 rounded-full bg-[#FF8C00] mr-3"></div>
+                        <div>
+                            <p class="font-medium">Plateau</p>
+                            <p class="text-sm text-gray-500">Abidjan, Côte d'Ivoire</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-4 h-4 rounded-full bg-[#1A2A6C] mr-3"></div>
+                        <div>
+                            <p class="font-medium">Yopougon</p>
+                            <p class="text-sm text-gray-500">Abidjan, Côte d'Ivoire</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="driver-status" class="text-center py-2 px-4 bg-blue-100 text-blue-800 rounded-lg mb-4">
+                    <i class="fas fa-car mr-2"></i> Votre chauffeur est en chemin
+                </div>
+                
+                <button id="cancel-ride" class="w-full bg-red-100 text-red-600 py-3 rounded-lg font-bold hover:bg-red-200 transition-all">
+                    Annuler la course
+                </button>
+            </div>
+        </main>
+
+        <!-- Bottom Navigation -->
+        <nav class="bg-white shadow-lg">
+            <div class="container mx-auto px-4">
+                <div class="flex justify-around">
+                    <button class="py-4 px-6 text-[#FF8C00] border-b-2 border-[#FF8C00]">
+                        <i class="fas fa-home text-xl"></i>
+                        <p class="text-xs mt-1">Accueil</p>
+                    </button>
+                    <button class="py-4 px-6 text-gray-500">
+                        <i class="fas fa-search text-xl"></i>
+                        <p class="text-xs mt-1">Rechercher</p>
+                    </button>
+                    <button class="py-4 px-6 text-gray-500">
+                        <i class="fas fa-wallet text-xl"></i>
+                        <p class="text-xs mt-1">Portefeuille</p>
+                    </button>
+                    <button class="py-4 px-6 text-gray-500">
+                        <i class="fas fa-user text-xl"></i>
+                        <p class="text-xs mt-1">Profil</p>
+                    </button>
+                </div>
+            </div>
+        </nav>
+    </div>
+
+    <script>
+        // Initialize the map centered on Abidjan
+        const map = L.map('map').setView([5.3599, -4.0083], 12);
+        
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+        
+        // Add markers for major cities in Côte d'Ivoire
+        const cities = [
+            { name: "Abidjan", coords: [5.3599, -4.0083] },
+            { name: "Yamoussoukro", coords: [6.8276, -5.2893] },
+            { name: "Bouaké", coords: [7.6906, -5.0301] },
+            { name: "San-Pédro", coords: [4.7485, -6.6366] },
+            { name: "Korhogo", coords: [9.4495, -5.6437] },
+            { name: "Man", coords: [7.4125, -7.5538] },
+            { name: "Gagnoa", coords: [6.1375, -5.9089] },
+            { name: "Daloa", coords: [6.8774, -6.4502] },
+            { name: "Anyama", coords: [5.4946, -4.0518] },
+            { name: "Abengourou", coords: [6.7297, -3.4918] }
+        ];
+        
+        cities.forEach(city => {
+            L.marker(city.coords)
+                .addTo(map)
+                .bindPopup(`<b>${city.name}</b><br>Côte d'Ivoire`);
+        });
+        
+        // Variables for ride simulation
+        let pickupMarker, destinationMarker, routeLine, vehicleMarker;
+        let selectedVehicleType = null;
+        let rideInterval;
+        let progress = 0;
+        
+        // Set default pickup and destination (Abidjan to Yopougon)
+        document.getElementById('pickup').value = "Plateau, Abidjan";
+        document.getElementById('destination').value = "Yopougon, Abidjan";
+        
+        // Add default markers
+        const defaultPickup = [5.3197, -4.0186]; // Plateau
+        const defaultDestination = [5.3356, -4.0775]; // Yopougon
+        
+        pickupMarker = L.marker(defaultPickup, {
+            icon: L.divIcon({
+                className: 'vehicle-marker',
+                html: '<i class="fas fa-map-marker-alt"></i>',
+                iconSize: [24, 24]
+            })
+        }).addTo(map).bindPopup("Point de départ");
+        
+        destinationMarker = L.marker(defaultDestination, {
+            icon: L.divIcon({
+                className: 'vehicle-marker',
+                html: '<i class="fas fa-flag"></i>',
+                iconSize: [24, 24]
+            })
+        }).addTo(map).bindPopup("Destination");
+        
+        // Draw a route between the points
+        routeLine = L.polyline([defaultPickup, defaultDestination], {
+            color: '#1A2A6C',
+            weight: 4,
+            dashArray: '10, 10'
+        }).addTo(map);
+        
+        // Add a vehicle marker at pickup point
+        vehicleMarker = L.marker(defaultPickup, {
+            icon: L.divIcon({
+                className: 'vehicle-marker',
+                html: '<i class="fas fa-car"></i>',
+                iconSize: [24, 24]
+            })
+        }).addTo(map).bindPopup("Votre véhicule");
+        
+        // Fit map to show both points
+        map.fitBounds([defaultPickup, defaultDestination]);
+        
+        // Vehicle selection function
+        function selectVehicle(type) {
+            selectedVehicleType = type;
+            
+            // Update UI to show selected vehicle
+            document.querySelectorAll('.border').forEach(el => {
+                el.classList.remove('border-[#FF8C00]');
+            });
+            event.currentTarget.classList.add('border-[#FF8C00]');
+            
+            // Show driver assignment section
+            document.getElementById('driver-assignment').classList.remove('hidden');
+            
+            // Update price based on vehicle type
+            let price = 0;
+            switch(type) {
+                case 'eco':
+                    price = 2550;
+                    break;
+                case 'comfort':
+                    price = 5100;
+                    break;
+                case 'moto':
+                    price = 1275;
+                    break;
+            }
+            
+            document.querySelector('#driver-assignment .font-bold.text-\\[#FF8C00\\]').textContent = `${price.toLocaleString()} FCFA`;
+        }
+        
+        // Confirm ride button
+        document.getElementById('confirm-ride').addEventListener('click', function() {
+            document.getElementById('driver-assignment').classList.add('hidden');
+            document.getElementById('ride-simulation').classList.remove('hidden');
+            
+            // Update progress bar and ride simulation
+            simulateRide();
+        });
+        
+        // Cancel ride button
+        document.getElementById('cancel-ride').addEventListener('click', function() {
+            clearInterval(rideInterval);
+            document.getElementById('ride-simulation').classList.add('hidden');
+            
+            // Reset progress
+            progress = 0;
+            document.getElementById('progress-bar').style.width = '0%';
+            document.getElementById('progress-percent').textContent = '0%';
+            document.getElementById('remaining-distance').textContent = '8.5 km';
+            document.getElementById('remaining-time').textContent = '15 min';
+            document.getElementById('current-cost').textContent = '0 FCFA';
+            document.getElementById('driver-status').innerHTML = '<i class="fas fa-car mr-2"></i> Votre chauffeur est en chemin';
+            
+            // Reset vehicle position
+            vehicleMarker.setLatLng(defaultPickup);
+        });
+        
+        // Simulate the ride progress
+        function simulateRide() {
+            let distance = 8.5; // km
+            let duration = 15; // minutes
+            let price = selectedVehicleType === 'eco' ? 2550 : 
+                       selectedVehicleType === 'comfort' ? 5100 : 1275;
+            
+            let distanceStep = distance / 100;
+            let timeStep = duration / 100;
+            let priceStep = price / 100;
+            
+            let currentDistance = distance;
+            let currentTime = duration;
+            let currentPrice = 0;
+            
+            let driverStatus = 0; // 0: en chemin, 1: course en cours, 2: arrivé
+            
+            rideInterval = setInterval(() => {
+                progress += 1;
+                
+                if (progress >= 100) {
+                    clearInterval(rideInterval);
+                    progress = 100;
+                    
+                    // Update driver status to "arrived"
+                    document.getElementById('driver-status').innerHTML = '<i class="fas fa-check-circle mr-2"></i> Votre chauffeur est arrivé';
+                } else if (progress >= 30 && driverStatus === 0) {
+                    // Update driver status to "ride in progress"
+                    driverStatus = 1;
+                    document.getElementById('driver-status').innerHTML = '<i class="fas fa-running mr-2"></i> Course en cours';
+                }
+                
+                currentDistance = (distance - (distance * progress / 100)).toFixed(1);
+                currentTime = Math.max(1, Math.floor(duration - (duration * progress / 100)));
+                currentPrice = Math.floor(price * progress / 100);
+                
+                // Update progress bar
+                document.getElementById('progress-bar').style.width = `${progress}%`;
+                document.getElementById('progress-percent').textContent = `${progress}%`;
+                
+                // Update info
+                document.getElementById('remaining-distance').textContent = `${currentDistance} km`;
+                document.getElementById('remaining-time').textContent = `${currentTime} min`;
+                document.getElementById('current-cost').textContent = `${currentPrice.toLocaleString()} FCFA`;
+                
+                // Update vehicle position on map
+                const lat = defaultPickup[0] + ((defaultDestination[0] - defaultPickup[0]) * progress / 100);
+                const lng = defaultPickup[1] + ((defaultDestination[1] - defaultPickup[1]) * progress / 100);
+                vehicleMarker.setLatLng([lat, lng]);
+                
+            }, 150);
+        }
+        
+        // Service Worker Registration for PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(registration => {
+                        console.log('ServiceWorker registration successful');
+                    })
+                    .catch(err => {
+                        console.log('ServiceWorker registration failed: ', err);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>
