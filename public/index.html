@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Test IA - OpenRouter Proxy Demo</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: 2em auto; }
+    label, input, button { font-size: 1rem; }
+    textarea { width: 100%; min-height: 4em; }
+    .response { background: #f9f9f9; border: 1px solid #ddd; margin-top: 1em; padding: 1em; }
+  </style>
+</head>
+<body>
+  <h1>Démo OpenRouter IA (Proxy sécurisé)</h1>
+  <form id="openrouter-form">
+    <label for="question">Votre question :</label><br>
+    <textarea id="question" name="question" required>Quelle est la signification de la vie ?</textarea><br>
+    <button type="submit">Envoyer à l’IA</button>
+  </form>
+  <div id="response" class="response"></div>
+  <script type="module" src="../src/openrouter-frontend.ts"></script>
+</body>
+</html>
